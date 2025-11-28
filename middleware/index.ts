@@ -1,4 +1,13 @@
+const ROBOT = "192.168.2.186";
+
 const ws = new WebSocket("ws://100.102.215.58:9000")
+
+ws.onopen = () => {
+    ws.send(JSON.stringify({
+        type: "connect",
+        robot: ROBOT
+    }))
+}
 
 export function addCors(response: Response, req?: Request): Response {
     const headers = new Headers(response.headers);
@@ -33,6 +42,31 @@ const server = Bun.serve({
         if (req.method === "OPTIONS") {
             return addCors(new Response(null, { status: 204 }), req);
         }
-        return new Response("OK", { status: 200 });
+
+        const pathname = new URL(req.url).pathname;
+
+        if (req.method === "POST" && pathname === "/say") {
+            const data = JSON.parse(await req.text());
+            if (!data || !data["message"]) {
+                return new Response("Bad Request", { status: 400 })
+            }
+            ws.send(JSON.stringify({
+                type: "method",
+                robot: ROBOT,
+                service: "ALTextToSpeech",
+                method: "say",
+                args: [data["message"]]
+            }))
+        }
+
+        return new Response("OK", { status: 404 });
     }
 });
+
+process.on("SIGINT", () => {
+    server.stop()
+})
+
+process.on("SIGTERM", () => {
+    server.stop(true)
+})
