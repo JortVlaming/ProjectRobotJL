@@ -1,31 +1,103 @@
+// index.ts
 const ROBOT = "192.168.2.186";
 
-const ws = new WebSocket("ws://100.102.215.58:9000")
+// --------------------------------------
+// CONFIG
+// --------------------------------------
+const WS_URL = "ws://100.102.215.58:9000";
+const DEBUG = true;                         // << ENABLE DEBUG MODE HERE
+const RECONNECT_BASE = 1000;                 // 1s
+const RECONNECT_MAX = 8000;                  // 8s max
+let reconnectDelay = RECONNECT_BASE;
 
-ws.onopen = () => {
-    ws.send(JSON.stringify({
-        type: "connect",
-        robot: ROBOT
-    }))
+// --------------------------------------
+// WebSocket wrapper with auto-reconnect
+// --------------------------------------
+let ws: WebSocket | null = null;
+let kill = false;
+
+function log(...args: any[]) {
+    console.log("[WS]", ...args);
 }
 
-export function addCors(response: Response, req?: Request): Response {
+// Debug mode → replace ws logic with no-op stub
+if (DEBUG) {
+    log("DEBUG MODE ENABLED – no websocket connection will be made.");
+
+    ws = {
+        readyState: 1,
+        send: (msg: any) => log("(debug) send →", msg),
+        close: () => log("(debug) close"),
+    } as any;
+} else {
+    connect();
+}
+
+function connect() {
+    log("Connecting to", WS_URL);
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+        log("Connected");
+        reconnectDelay = RECONNECT_BASE; // reset backoff
+
+        ws?.send(JSON.stringify({
+            type: "connect",
+            robot: ROBOT
+        }));
+    };
+
+    ws.onmessage = (msg) => {
+        log("Message:", msg.data);
+    };
+
+    ws.onerror = (err: Event) => {
+        log("Socket error:", err);
+    };
+
+    ws.onclose = () => {
+        if (kill) return;
+
+        log("Disconnected. Reconnecting in", reconnectDelay, "ms...");
+        setTimeout(() => {
+            reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX);
+            connect();
+        }, reconnectDelay);
+    };
+}
+
+// --------------------------------------
+// Helper for sending WS messages safely
+// --------------------------------------
+function sendWS(data: any) {
+    const payload = JSON.stringify(data);
+
+    if (DEBUG) {
+        log("(debug) send →", payload);
+        return;
+    }
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log("WS not open. Dropping message:", payload);
+        return;
+    }
+
+    ws.send(payload);
+}
+
+// --------------------------------------
+// HTTP Server
+// --------------------------------------
+function addCors(response: Response, req?: Request) {
     const headers = new Headers(response.headers);
 
-    // For security, echo the Origin header when present instead of using '*'
     headers.set("Access-Control-Allow-Origin", "*");
-
-    // Allow credentials if the client sent cookies/auth headers
     headers.set("Access-Control-Allow-Credentials", "true");
-
-    // Allowed methods and headers
     headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 
-    // If the request had Access-Control-Request-Headers (preflight), echo them back
     const reqHeaders = req?.headers.get("access-control-request-headers");
     headers.set("Access-Control-Allow-Headers", reqHeaders ?? "*");
 
-    // Expose common headers to the browser
     headers.set("Access-Control-Expose-Headers", "ETag, Content-Length, Content-Type");
 
     return new Response(response.body, {
@@ -38,7 +110,7 @@ export function addCors(response: Response, req?: Request): Response {
 const server = Bun.serve({
     port: 3000,
     hostname: "0.0.0.0",
-    fetch: async (req): Promise<Response> => {
+    fetch: async (req) => {
         if (req.method === "OPTIONS") {
             return addCors(new Response(null, { status: 204 }), req);
         }
@@ -47,26 +119,39 @@ const server = Bun.serve({
 
         if (req.method === "POST" && pathname === "/say") {
             const data = JSON.parse(await req.text());
-            if (!data || !data["message"]) {
-                return new Response("Bad Request", { status: 400 })
+
+            if (!data?.message) {
+                return new Response("Bad Request", { status: 400 });
             }
-            ws.send(JSON.stringify({
+
+            sendWS({
                 type: "method",
                 robot: ROBOT,
                 service: "ALTextToSpeech",
                 method: "say",
-                args: [data["message"]]
-            }))
+                args: [data.message]
+            });
+
+            return addCors(new Response("OK"), req);
         }
 
-        return new Response("OK", { status: 404 });
+        return addCors(new Response("Not Found", { status: 404 }), req);
     }
 });
 
+// --------------------------------------
+// Shutdown handlers
+// --------------------------------------
 process.on("SIGINT", () => {
-    server.stop()
-})
+    kill = true;
+    log("SIGINT received. Stopping server...");
+    server.stop();
+    try { ws?.close(); } catch {}
+});
 
 process.on("SIGTERM", () => {
-    server.stop(true)
-})
+    kill = true;
+    log("SIGTERM received. Stopping server...");
+    server.stop(true);
+    try { ws?.close(); } catch {}
+});
