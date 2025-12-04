@@ -174,7 +174,9 @@ const server = Bun.serve({
             // Forward client messages to backend
             const msg = typeof message === 'string' ? message : new TextDecoder().decode(message);
             log("Client message:", msg);
-            sendWS(JSON.parse(msg));
+            const data = JSON.parse(msg);
+            data["robot"] = ROBOT
+            sendWS(data);
         },
         close(ws) {
             clientSockets.delete(ws);
