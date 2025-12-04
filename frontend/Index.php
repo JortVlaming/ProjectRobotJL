@@ -21,8 +21,10 @@
 
 <script>
 
+const API_URL = "100.102.215.58:3000"
+
 // --- WebSocket setup ---
-const socket = new WebSocket("ws://100.102.215.58:3000/ws");
+const socket = new WebSocket(`ws://${API_URL}/ws`);
 
 // Wait until WebSocket is open
 socket.addEventListener("open", () => {
@@ -31,6 +33,7 @@ socket.addEventListener("open", () => {
 
 // --- Gamepad polling ---
 let previousButtons = {};
+let wasMoving = false;
 
 function pollGamepad() {
   const gamepads = navigator.getGamepads();
@@ -123,6 +126,19 @@ window.addEventListener("gamepadconnected", () => {
   pollGamepad();
 });
 
+document.getElementById("messageForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const message = document.getElementById("messageInput").value;
+
+    fetch(`http://${API_URL}/say`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({message: message})
+    })
+})
 
 </script>
 
