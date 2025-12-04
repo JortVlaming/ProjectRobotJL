@@ -1,14 +1,15 @@
 // index.ts
-const ROBOT = "192.168.2.186";
+const ROBOT = "192.168.2.198";
 
 // --------------------------------------
 // CONFIG
 // --------------------------------------
 const WS_URL = "ws://100.102.215.58:9000";
-const DEBUG = true;                         // << ENABLE DEBUG MODE HERE
+const DEBUG = false;                         // << ENABLE DEBUG MODE HERE
 const RECONNECT_BASE = 1000;                 // 1s
 const RECONNECT_MAX = 8000;                  // 8s max
 let reconnectDelay = RECONNECT_BASE;
+let clientSockets = new Set<any>();
 
 // --------------------------------------
 // WebSocket wrapper with auto-reconnect
@@ -49,6 +50,12 @@ function connect() {
 
     ws.onmessage = (msg) => {
         log("Message:", msg.data);
+        // Broadcast to all connected client WebSockets
+        clientSockets.forEach(client => {
+            if (client.readyState === 1) {
+                client.send(msg.data);
+            }
+        });
     };
 
     ws.onerror = (err: Event) => {
@@ -110,18 +117,39 @@ function addCors(response: Response, req?: Request) {
 const server = Bun.serve({
     port: 3000,
     hostname: "0.0.0.0",
-    fetch: async (req) => {
+    fetch: async (req, server) => {
         if (req.method === "OPTIONS") {
             return addCors(new Response(null, { status: 204 }), req);
         }
 
         const pathname = new URL(req.url).pathname;
 
+        // WebSocket upgrade
+        if (pathname === "/ws") {
+            const upgraded = server.upgrade(req);
+            if (upgraded) {
+                return undefined;
+            }
+            return new Response("WebSocket upgrade failed", { status: 400 });
+        }
+
         if (req.method === "POST" && pathname === "/say") {
             const data = JSON.parse(await req.text());
 
             if (!data?.message) {
                 return new Response("Bad Request", { status: 400 });
+            }
+
+            if (data.volume && typeof data.volume === "number") {
+                sendWS({
+                    type: "method",
+                    robot: ROBOT,
+                    service: "ALTextToSpeech",
+                    method: "setVolume",
+                    args: [data.volume]
+                });
+                // Small delay to ensure messages don't get concatenated
+                await new Promise(resolve => setTimeout(resolve, 10));
             }
 
             sendWS({
@@ -136,6 +164,22 @@ const server = Bun.serve({
         }
 
         return addCors(new Response("Not Found", { status: 404 }), req);
+    },
+    websocket: {
+        open(ws) {
+            clientSockets.add(ws);
+            log("Client WebSocket connected. Total clients:", clientSockets.size);
+        },
+        message(ws, message) {
+            // Forward client messages to backend
+            const msg = typeof message === 'string' ? message : new TextDecoder().decode(message);
+            log("Client message:", msg);
+            sendWS(JSON.parse(msg));
+        },
+        close(ws) {
+            clientSockets.delete(ws);
+            log("Client WebSocket disconnected. Total clients:", clientSockets.size);
+        }
     }
 });
 
