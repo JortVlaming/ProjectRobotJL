@@ -10,14 +10,21 @@
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <link rel="stylesheet" href="css.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <title>Robot pagina</title>
 </head>
-<body>
+<body class="bg-secondary p-3">
 <h1>Welkom</h1>
 
 <p>Welkom</p>
 
-<form id="messageForm"></form>
+<form id="messageForm" action="http://100.102.215.58:3000/say" method="POST">
+    <div class="mb-3 mt-3">
+        <label for="messageForm" class="form-label">Send message to robot</label>
+        <input type="text" class="form-control" id="messageInput" placeholder="Enter message">
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
 
 <script>
 
