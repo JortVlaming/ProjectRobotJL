@@ -134,7 +134,18 @@ const server = Bun.serve({
         }
 
         if (req.method === "POST" && pathname === "/say") {
-            const data = JSON.parse(await req.text());
+            let data;
+            
+            const contentType = req.headers.get("content-type");
+            if (contentType?.includes("application/x-www-form-urlencoded")) {
+                const formData = await req.formData();
+                data = {
+                    message: formData.get("message"),
+                    volume: formData.get("volume") ? parseFloat(formData.get("volume") as string) : undefined
+                };
+            } else {
+                data = JSON.parse(await req.text());
+            }
 
             if (!data?.message) {
                 return new Response("Bad Request", { status: 400 });
