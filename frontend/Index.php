@@ -17,6 +17,8 @@
 
 <p>Welkom</p>
 
+<form id="messageForm"></form>
+
 <script>
 
 // --- WebSocket setup ---
