@@ -21,14 +21,14 @@
 <form id="messageForm" action="http://100.102.215.58:3000/say" method="POST">
     <div class="mb-3 mt-3">
         <label for="messageForm" class="form-label">Send message to robot</label>
-        <input type="text" class="form-control" id="messageInput" placeholder="Enter message">
+        <input type="text" class="form-control" id="messageInput" placeholder="Enter message" autocomplete="off">
     </div>
     <button type="submit" class="btn btn-primary">Submit</button>
 </form>
 
 <script>
 
-const API_URL = "100.102.215.58:3000"
+const API_URL = location.hostname + ":3000"
 
 // --- WebSocket setup ---
 const socket = new WebSocket(`ws://${API_URL}/ws`);
@@ -70,11 +70,21 @@ function pollGamepad() {
     }
     if (buttons.b && !previousButtons.b) {
       console.log("B button pressed");
-      // Add your B button logic here
+      socket.send(JSON.stringify({
+        type: "method",
+          service: "ALRobotPosture",
+          method: "goToPosture",
+          args: ["Sitting", 1.0]
+      }))
     }
     if (buttons.x && !previousButtons.x) {
       console.log("X button pressed");
-      // Add your X button logic here
+      socket.send(JSON.stringify({
+        type: "method",
+          service: "ALRobotPosture",
+          method: "goToPosture",
+          args: ["LyingBack", 1.0]
+      }))
     }
     if (buttons.y && !previousButtons.y) {
       console.log("Y button pressed");
