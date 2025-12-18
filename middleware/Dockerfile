@@ -1,6 +1,6 @@
 # Middleware Dockerfile
 FROM oven/bun:latest
 WORKDIR /app
-COPY middleware/ .
+COPY . .
 RUN bun install
 CMD ["bun", "run", "index.ts"]
