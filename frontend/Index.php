@@ -16,8 +16,6 @@
 <body class="bg-secondary p-3">
 <h1>Welkom</h1>
 
-<p>Welkom</p>
-
 <form id="messageForm" action="http://100.102.215.58:3000/say" method="POST">
     <div class="mb-3 mt-3">
         <label for="messageForm" class="form-label">Send message to robot</label>
